@@ -76,54 +76,120 @@ async def sync_calendar(db: AsyncSession):
     
     events_added = 0
     events_skipped = 0
-
-    # Expand recurring events up to 1 year in the future
-    now = datetime.utcnow()
-    one_year_later = now + timedelta(days=365)
-    expanded_events = list(recurring_ical_events.of(cal).between(now, one_year_later))
     processed_uids = set()
 
-    for event in expanded_events:
-        component = event['component']
-        uid = str(component.get('uid'))
-        # For recurring events, make UID unique per instance
-        instance_start = event['start']
-        instance_uid = f"{uid}-{instance_start.isoformat()}"
-        if instance_uid in processed_uids:
-            continue
-        processed_uids.add(instance_uid)
+    # First, process all original events (including non-recurring ones)
+    for component in cal.walk():
+        if component.name == "VEVENT":
+            uid = str(component.get('uid'))
+            start = component.get('dtstart').dt
+            instance_uid = f"{uid}-{start.isoformat()}"
+            
+            if instance_uid in processed_uids:
+                continue
+            processed_uids.add(instance_uid)
 
-        # Check if event already exists
-        result = await db.execute(select(Event).filter(Event.uid == instance_uid))
-        existing_event = result.scalar_one_or_none()
-        if existing_event:
-            events_skipped += 1
-            continue
+            # Check if event already exists in the DB
+            result = await db.execute(select(Event).filter(Event.uid == instance_uid))
+            existing_event = result.scalar_one_or_none()
+            if existing_event:
+                events_skipped += 1
+                continue
+            
+            # Process the original event using existing logic
+            try:
+                # Extract event data using existing logic
+                summary = str(component.get('summary', ''))
+                description = str(component.get('description', ''))
+                location = str(component.get('location', ''))
+                end = component.get('dtend')
+                if end:
+                    end = end.dt
+                else:
+                    # If no end time, assume 1 hour duration
+                    if hasattr(start, 'hour'):
+                        end = start + timedelta(hours=1)
+                    else:
+                        end = start + timedelta(days=1)
+                
+                # Create event in database
+                event = Event(
+                    uid=instance_uid,
+                    title=summary,
+                    description=description,
+                    location=location,
+                    start_time=start,
+                    end_time=end,
+                    calendar_id=calendar_to_sync.id
+                )
+                db.add(event)
+                events_added += 1
+                print(f"[DEBUG] Added original event: {instance_uid}, {summary}, {start}", flush=True)
+                
+            except Exception as e:
+                print(f"[ERROR] Failed to process original event {instance_uid}: {e}", flush=True)
+                events_skipped += 1
 
-        start_time = event['start']
-        end_time = event['end']
-        if isinstance(start_time, datetime) and start_time.tzinfo is None:
-            start_time = pytz.utc.localize(start_time)
-        if isinstance(end_time, datetime) and end_time.tzinfo is None:
-            end_time = pytz.utc.localize(end_time)
+    # Now expand and process recurring events
+    try:
+        # Expand recurring events up to 1 year in the future
+        now = datetime.utcnow()
+        one_year_later = now + timedelta(days=365)
+        expanded_events = list(recurring_ical_events.of(cal).between(now, one_year_later))
+        print(f"[DEBUG] Number of expanded recurring events: {len(expanded_events)}", flush=True)
+        
+        for event in expanded_events:
+            uid = str(event.get('UID'))
+            summary = str(event.get('SUMMARY', ''))
+            start = event.get('DTSTART').dt
+            instance_uid = f"{uid}-{start.isoformat()}"
+            
+            if instance_uid in processed_uids:
+                continue
+            processed_uids.add(instance_uid)
 
-        title = str(component.get('summary', ''))
-        description = str(component.get('description', ''))
-        matching_category = find_matching_category(title, description, categories)
-
-        new_event = Event(
-            uid=instance_uid,
-            title=title,
-            start_time=start_time,
-            end_time=end_time,
-            location=str(component.get('location', '')),
-            description=description,
-            calendar_id=calendar_to_sync.id,
-            category_id=matching_category.id if matching_category else None,
-            synced_at=datetime.utcnow()
-        )
-        db.add(new_event)
-        events_added += 1
+            # Check if event already exists in the DB
+            result = await db.execute(select(Event).filter(Event.uid == instance_uid))
+            existing_event = result.scalar_one_or_none()
+            if existing_event:
+                events_skipped += 1
+                continue
+            
+            try:
+                # Extract event data
+                description = str(event.get('DESCRIPTION', ''))
+                location = str(event.get('LOCATION', ''))
+                end = event.get('DTEND')
+                if end:
+                    end = end.dt
+                else:
+                    # If no end time, assume 1 hour duration
+                    if hasattr(start, 'hour'):
+                        end = start + timedelta(hours=1)
+                    else:
+                        end = start + timedelta(days=1)
+                
+                # Create event in database
+                event_obj = Event(
+                    uid=instance_uid,
+                    title=summary,
+                    description=description,
+                    location=location,
+                    start_time=start,
+                    end_time=end,
+                    calendar_id=calendar_to_sync.id
+                )
+                db.add(event_obj)
+                events_added += 1
+                print(f"[DEBUG] Added recurring event: {instance_uid}, {summary}, {start}", flush=True)
+                
+            except Exception as e:
+                print(f"[ERROR] Failed to process recurring event {instance_uid}: {e}", flush=True)
+                events_skipped += 1
+                
+    except Exception as e:
+        print(f"[ERROR] Failed to expand recurring events: {e}", flush=True)
+        # Continue with sync even if recurring expansion fails
 
     calendar_to_sync.last_synced = datetime.utcnow()
     db.add(calendar_to_sync)

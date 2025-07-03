@@ -2,7 +2,7 @@
 set -e
 
 # --- Configuration ---
-PI_HOST="${PI_HOST:-pi@192.168.1.100}"  # Change this to your Pi's IP
+PI_HOST="${PI_HOST:-pi@192.168.4.41}"  # Change this to your Pi's IP
 PI_DIR="${PI_DIR:-/home/pi/HomeBase}"
 LOCAL_DIR="$(pwd)"
 PROJECT_NAME="HomeBase"
@@ -178,7 +178,7 @@ print_header
 
 # Check if PI_HOST is set
 if [ -z "$PI_HOST" ]; then
-    echo -e "${YELLOW}⚠️  PI_HOST not set. Using default: pi@192.168.1.100${NC}"
+    echo -e "${YELLOW}⚠️  PI_HOST not set. Using default: pi@192.168.4.41${NC}"
     echo -e "${YELLOW}   Set PI_HOST environment variable to customize${NC}"
     echo -e "${YELLOW}   Example: PI_HOST=pi@192.168.1.50 ./deploy.sh${NC}"
     echo ""
@@ -195,4 +195,5 @@ check_service_status
 create_update_script
 print_final_instructions
 
-ssh pi@192.168.4.41 "pkill -f 'python.*main.py'; cd /home/pi/HomeBase && source venv/bin/activate && nohup python main.py > app.log 2>&1 &" 
+ssh pi@192.168.4.41 "pkill -f 'python.*main.py'; cd /home/pi/HomeBase && source venv/bin/activate && nohup python main.py > app.log 2>&1 &"
+uvicorn app.main:app --reload --log-level debug 
