@@ -10,7 +10,7 @@ import os
 # Add the current directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from hockey_schedule_sync import parse_hockey_schedule, create_hockey_category, sync_hockey_events
+from scripts.hockey_schedule_sync import parse_hockey_schedule, create_hockey_category, sync_hockey_events
 
 async def test_hockey_sync():
     """Test the hockey sync functionality"""

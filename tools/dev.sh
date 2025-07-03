@@ -9,8 +9,8 @@ VENV_PYTHON="$VENV_DIR/bin/python"
 VENV_PIP="$VENV_DIR/bin/pip"
 VENV_UVICORN="$VENV_DIR/bin/uvicorn"
 REQUIREMENTS_FILE="$BACKEND_DIR/requirements.txt"
-SEED_CATEGORIES_SCRIPT="$BACKEND_DIR/seed_categories.py"
-ADD_EVENTS_SCRIPT="$BACKEND_DIR/add_sample_events.py"
+SEED_CATEGORIES_SCRIPT="$BACKEND_DIR/scripts/seed_categories.py"
+ADD_EVENTS_SCRIPT="$BACKEND_DIR/scripts/add_sample_events.py"
 
 # Calendar defaults (override via env)
 DEFAULT_CALENDAR_NAME="${CALENDAR_NAME:-HomeBase}"
@@ -43,7 +43,7 @@ function setup_database() {
     rm -f "$DB_FILE"
     
     echo "🗄️ Creating new database tables..."
-    (cd "$BACKEND_DIR" && "$VENV_PYTHON" create_db.py)
+    (cd "$BACKEND_DIR" && "$VENV_PYTHON" scripts/create_db.py)
     echo "✅ Database tables created successfully."
 }
 

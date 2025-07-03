@@ -40,7 +40,7 @@
 cd /path/to/HomeBase
 
 # Run the deployment script
-./deploy.sh
+./tools/deploy.sh
 ```
 
 The script will:
@@ -87,7 +87,7 @@ ssh pi@YOUR_PI_IP 'sudo systemctl stop homebase'
 
 ### Option 1: Full Redeploy
 ```bash
-./deploy.sh
+./tools/deploy.sh
 ```
 
 ### Option 2: Quick Update (if using git)

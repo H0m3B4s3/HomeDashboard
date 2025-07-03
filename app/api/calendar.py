@@ -8,7 +8,7 @@ from app.models.calendar import Calendar
 from app.schemas import Calendar as CalendarSchema, CalendarCreate
 from app.services.calendar_sync import sync_calendar
 from app.services.calendar_sync_up import sync_events_up
-from hockey_schedule_sync import sync_hockey_events, create_hockey_category, cleanup_old_hockey_events
+from scripts.hockey_schedule_sync import sync_hockey_events, create_hockey_category, cleanup_old_hockey_events
 
 router = APIRouter()
 

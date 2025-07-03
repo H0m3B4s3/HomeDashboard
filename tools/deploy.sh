@@ -98,7 +98,7 @@ function setup_pi_environment() {
 
 function setup_database() {
     print_step "Setting up database on Pi..."
-    ssh "$PI_HOST" "cd $PI_DIR && source venv/bin/activate && python create_db.py && python seed_categories.py"
+    ssh "$PI_HOST" "cd $PI_DIR && source venv/bin/activate && python scripts/create_db.py && python scripts/seed_categories.py"
     print_success "Database initialized"
 }
 
