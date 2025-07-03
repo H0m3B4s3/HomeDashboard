@@ -1,10 +1,29 @@
 // Create the js directory and sync.js file if missing
 // Handles the Sync Now button and calls the backend sync API
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Auto-sync from iCloud on every page load
+    const syncStatus = document.getElementById('sync-status');
+    if (syncStatus) syncStatus.textContent = 'Syncing from iCloud...';
+    try {
+        const response = await fetch('/api/calendar/sync', { method: 'POST' });
+        const result = await response.json();
+        if (response.ok) {
+            if (syncStatus) syncStatus.textContent = result.message || 'Sync successful!';
+        } else {
+            throw new Error(result.detail || 'Sync failed');
+        }
+    } catch (error) {
+        console.error('Auto-sync failed:', error);
+        if (syncStatus) syncStatus.textContent = `Error: ${error.message}`;
+    }
+    // After sync, refresh events if available
+    if (window.fetchAndRenderEvents) {
+        window.fetchAndRenderEvents();
+    }
+
     const syncNowBtn = document.getElementById('sync-now-btn');
     const syncUpBtn = document.getElementById('sync-up-btn');
-    const syncStatus = document.getElementById('sync-status');
     const lastSync = document.getElementById('last-sync');
 
     if (syncNowBtn) {
