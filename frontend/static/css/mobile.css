@@ -1,0 +1,450 @@
+/* Mobile-specific styles */
+
+@media (max-width: 768px) {
+    /* App container */
+    .app-container {
+        max-width: 100%;
+        box-shadow: none;
+    }
+    
+    /* Header */
+    .app-header {
+        padding: 0.75rem;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .app-title {
+        font-size: 1.25rem;
+        text-align: center;
+    }
+    
+    .header-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    /* Buttons - larger touch targets */
+    .btn {
+        min-height: 3rem;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        border-radius: 0.5rem;
+    }
+    
+    .view-btn {
+        min-height: 2.75rem;
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
+    }
+    
+    /* Navigation */
+    .calendar-nav {
+        padding: 0.75rem;
+        gap: 0.75rem;
+    }
+    
+    .nav-btn {
+        min-height: 2.75rem;
+        padding: 0.625rem 1rem;
+        font-size: 1.125rem;
+    }
+    
+    .current-date {
+        font-size: 1rem;
+        min-width: auto;
+        flex: 1;
+    }
+    
+    /* Calendar views */
+    .calendar-container {
+        height: calc(100vh - 200px);
+    }
+    
+    /* Daily view mobile */
+    .daily-timeline {
+        flex-direction: column;
+        height: 100%;
+    }
+    
+    .time-slots {
+        width: 100%;
+        height: auto;
+        display: flex;
+        overflow-x: auto;
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
+    }
+    
+    .time-slot {
+        min-width: 60px;
+        height: 40px;
+        border-right: 1px solid #f3f4f6;
+        border-bottom: none;
+        font-size: 0.75rem;
+    }
+    
+    .time-slot.hour {
+        background-color: #f3f4f6;
+        font-weight: 600;
+    }
+    
+    .events-container {
+        flex: 1;
+        height: calc(100vh - 300px);
+    }
+    
+    .event {
+        left: 4px;
+        right: 4px;
+        padding: 0.75rem;
+        font-size: 0.875rem;
+        min-height: 3rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    /* Weekly view mobile */
+    .week-header {
+        grid-template-columns: 50px repeat(7, 1fr);
+    }
+    
+    .week-header-cell {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.75rem;
+    }
+    
+    .week-grid {
+        grid-template-columns: 50px repeat(7, 1fr);
+        grid-template-rows: repeat(24, 40px);
+    }
+    
+    .week-time-slot {
+        font-size: 0.625rem;
+        padding: 0.25rem;
+    }
+    
+    .week-event {
+        left: 1px;
+        right: 1px;
+        padding: 0.125rem 0.25rem;
+        font-size: 0.625rem;
+        min-height: 1.5rem;
+    }
+    
+    /* Monthly view mobile */
+    .month-header {
+        grid-template-columns: repeat(7, 1fr);
+    }
+    
+    .month-header-cell {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.75rem;
+    }
+    
+    .month-body {
+        grid-template-columns: repeat(7, 1fr);
+        grid-template-rows: repeat(6, 1fr);
+    }
+    
+    .month-day {
+        min-height: 80px;
+        padding: 0.25rem;
+    }
+    
+    .month-day-number {
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .month-event {
+        font-size: 0.625rem;
+        padding: 0.125rem 0.25rem;
+        margin-bottom: 0.125rem;
+        min-height: 1.25rem;
+    }
+    
+    /* Modal mobile */
+    .modal-content {
+        width: 95%;
+        max-width: none;
+        margin: 1rem;
+        max-height: 90vh;
+    }
+    
+    .modal-header {
+        padding: 1rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+        max-height: 70vh;
+    }
+    
+    .modal-footer {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .modal-footer .btn {
+        width: 100%;
+    }
+    
+    /* Footer */
+    .app-footer {
+        padding: 0.5rem;
+    }
+    
+    .status-bar {
+        flex-direction: column;
+        gap: 0.25rem;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .status-item {
+        font-size: 0.75rem;
+    }
+}
+
+/* Touch-specific improvements */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    .btn, .nav-btn, .view-btn {
+        min-height: 3rem;
+    }
+    
+    .event, .week-event, .month-event {
+        min-height: 2.5rem;
+    }
+    
+    /* Remove hover effects on touch devices */
+    .btn:hover,
+    .nav-btn:hover,
+    .view-btn:hover,
+    .event:hover,
+    .week-event:hover,
+    .month-event:hover {
+        transform: none;
+        box-shadow: none;
+    }
+    
+    /* Active states for touch feedback */
+    .btn:active,
+    .nav-btn:active,
+    .view-btn:active {
+        transform: scale(0.98);
+        opacity: 0.8;
+    }
+    
+    .event:active,
+    .week-event:active,
+    .month-event:active {
+        transform: scale(0.98);
+        opacity: 0.9;
+    }
+}
+
+/* Landscape orientation adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+    .app-container {
+        height: 100vh;
+    }
+    
+    .header-content {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .calendar-container {
+        height: calc(100vh - 120px);
+    }
+    
+    .events-container {
+        height: calc(100vh - 200px);
+    }
+    
+    .daily-timeline {
+        flex-direction: row;
+    }
+    
+    .time-slots {
+        width: 80px;
+        height: 100%;
+        flex-direction: column;
+        overflow-y: auto;
+        border-right: 1px solid #e5e7eb;
+        border-bottom: none;
+    }
+    
+    .time-slot {
+        min-width: auto;
+        height: 60px;
+        border-right: none;
+        border-bottom: 1px solid #f3f4f6;
+    }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .event,
+    .week-event,
+    .month-event {
+        border-width: 0.5px;
+    }
+    
+    .time-slot,
+    .week-time-slot,
+    .month-day {
+        border-width: 0.5px;
+    }
+}
+
+/* Dark mode support (if user prefers) */
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #1f2937;
+        color: #f9fafb;
+    }
+    
+    .app-container {
+        background: #111827;
+    }
+    
+    .app-header {
+        background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+    }
+    
+    .calendar-nav {
+        background-color: #374151;
+        border-bottom-color: #4b5563;
+    }
+    
+    .nav-btn {
+        background-color: #374151;
+        border-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .nav-btn:hover {
+        background-color: #4b5563;
+    }
+    
+    .current-date {
+        color: #f9fafb;
+    }
+    
+    .time-slots {
+        background-color: #374151;
+        border-right-color: #4b5563;
+    }
+    
+    .time-slot {
+        border-bottom-color: #4b5563;
+        color: #d1d5db;
+    }
+    
+    .time-slot.hour {
+        background-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .week-header {
+        background-color: #374151;
+        border-bottom-color: #4b5563;
+    }
+    
+    .week-header-cell {
+        border-right-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .week-time-slot {
+        background-color: #374151;
+        border-right-color: #4b5563;
+        border-bottom-color: #4b5563;
+        color: #d1d5db;
+    }
+    
+    .week-day-cell {
+        background-color: #1f2937;
+        border-right-color: #4b5563;
+        border-bottom-color: #4b5563;
+    }
+    
+    .week-day-cell.today {
+        background-color: #451a03;
+    }
+    
+    .month-header {
+        background-color: #374151;
+        border-bottom-color: #4b5563;
+    }
+    
+    .month-header-cell {
+        border-right-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .month-day {
+        background-color: #1f2937;
+        border-right-color: #4b5563;
+        border-bottom-color: #4b5563;
+    }
+    
+    .month-day.other-month {
+        background-color: #374151;
+        color: #9ca3af;
+    }
+    
+    .month-day.today {
+        background-color: #1e3a8a;
+    }
+    
+    .month-day-number {
+        color: #f9fafb;
+    }
+    
+    .month-day.other-month .month-day-number {
+        color: #9ca3af;
+    }
+    
+    .month-day.today .month-day-number {
+        color: #93c5fd;
+    }
+    
+    .app-footer {
+        background-color: #374151;
+        border-top-color: #4b5563;
+    }
+    
+    .status-item {
+        color: #d1d5db;
+    }
+    
+    .modal-content {
+        background-color: #1f2937;
+        color: #f9fafb;
+    }
+    
+    .modal-header {
+        background-color: #374151;
+        border-bottom-color: #4b5563;
+    }
+    
+    .modal-header h3 {
+        color: #f9fafb;
+    }
+    
+    .modal-footer {
+        background-color: #374151;
+        border-top-color: #4b5563;
+    }
+} 

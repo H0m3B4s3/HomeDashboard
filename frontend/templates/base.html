@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeBase Calendar</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/calendar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/mobile.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-title">HomeBase Calendar</h1>
+                <div class="header-controls">
+                    <button id="new-event-btn" class="btn btn-secondary">New Event</button>
+                    <button id="sync-now-btn" class="btn btn-primary">Sync Now</button>
+                    <button id="sync-up-btn" class="btn btn-primary">Push to iCloud</button>
+                    <div class="view-selector">
+                        <a href="/" class="view-btn {% if request.path == '/' %}active{% endif %}">Daily</a>
+                        <a href="/weekly" class="view-btn {% if request.path == '/weekly' %}active{% endif %}">Weekly</a>
+                        <a href="/monthly" class="view-btn {% if request.path == '/monthly' %}active{% endif %}">Monthly</a>
+                        <a href="/settings" class="view-btn {% if request.path == '/settings' %}active{% endif %}">Settings</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <div class="calendar-nav">
+                <button id="prev-btn" class="nav-btn">&lt;</button>
+                <h2 id="current-date" class="current-date"></h2>
+                <button id="next-btn" class="nav-btn">&gt;</button>
+                <button id="today-btn" class="nav-btn">Today</button>
+            </div>
+            
+            <div class="calendar-container">
+                {% block calendar_view %}{% endblock %}
+            </div>
+        </main>
+        
+        <footer class="app-footer">
+            <div class="status-bar">
+                <div id="event-count" class="status-item">0 events</div>
+                <div id="sync-status" class="status-item">Never synced</div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Event Detail Modal -->
+    <div id="event-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Edit Event</h3>
+                <button id="modal-close" class="modal-close">&times;</button>
+            </div>
+            <form id="edit-event-form">
+                <input type="hidden" id="edit-event-id" name="id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-event-title">Title</label>
+                        <input type="text" id="edit-event-title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-event-category">Category</label>
+                        <select id="edit-event-category" name="category_id">
+                            <!-- Categories will be populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-start-time">Start Time</label>
+                        <input type="datetime-local" id="edit-start-time" name="start_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-end-time">End Time</label>
+                        <input type="datetime-local" id="edit-end-time" name="end_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-event-location">Location</label>
+                        <input type="text" id="edit-event-location" name="location">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-event-description">Description</label>
+                        <textarea id="edit-event-description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="delete-event-btn" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- New Event Modal -->
+    <div id="new-event-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Event</h3>
+                <button id="new-event-modal-close" class="modal-close">&times;</button>
+            </div>
+            <form id="new-event-form">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="event-title">Title</label>
+                        <input type="text" id="event-title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-category">Category</label>
+                        <select id="event-category" name="category_id">
+                            <!-- Categories will be populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="start-time">Start Time</label>
+                        <input type="datetime-local" id="start-time" name="start_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end-time">End Time</label>
+                        <input type="datetime-local" id="end-time" name="end_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-location">Location</label>
+                        <input type="text" id="event-location" name="location">
+                    </div>
+                    <div class="form-group">
+                        <label for="event-description">Description</label>
+                        <textarea id="event-description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="new-event-cancel" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/calendar-logic.js') }}"></script>
+    <script src="{{ url_for('static', path='/js/sync.js') }}"></script>
+    {% block page_scripts %}{% endblock %}
+</body>
+</html> 
