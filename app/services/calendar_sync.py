@@ -39,13 +39,12 @@ async def sync_calendar(db: AsyncSession):
     Fetches events from iCloud calendar using webcal URL,
     parses them, and stores them in the database.
     """
-    # We will sync the first calendar found in the DB.
-    # In a real app, you might pass a calendar_id.
-    result = await db.execute(select(CalendarModel).limit(1))
+    # We will sync the HomeBase calendar specifically.
+    result = await db.execute(select(CalendarModel).where(CalendarModel.name == "HomeBase"))
     calendar_to_sync = result.scalar_one_or_none()
 
     if not calendar_to_sync:
-        return {"status": "error", "message": "No calendar found in the database to sync."}
+        return {"status": "error", "message": "HomeBase calendar not found in the database. Please ensure it exists."}
 
     # Get all categories for name matching
     result = await db.execute(select(Category))

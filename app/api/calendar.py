@@ -8,6 +8,7 @@ from app.models.calendar import Calendar
 from app.schemas import Calendar as CalendarSchema, CalendarCreate
 from app.services.calendar_sync import sync_calendar
 from app.services.calendar_sync_up import sync_events_up
+from hockey_schedule_sync import sync_hockey_events, create_hockey_category, cleanup_old_hockey_events
 
 router = APIRouter()
 
@@ -53,4 +54,42 @@ async def sync_local_events_to_icloud(db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=sync_result["message"],
         )
-    return sync_result 
+    return sync_result
+
+@router.post("/sync-hockey", status_code=status.HTTP_200_OK)
+async def sync_hockey_schedule(db: AsyncSession = Depends(get_db)):
+    """Sync hockey schedule from Wallingford Hawks website with full comparison."""
+    try:
+        # Create hockey category
+        await create_hockey_category()
+        
+        # Clean up old events
+        cleaned_count = await cleanup_old_hockey_events()
+        
+        # Sync hockey events
+        sync_result = await sync_hockey_events()
+        
+        if sync_result is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to sync hockey schedule"
+            )
+        
+        return {
+            "status": "success",
+            "message": "Hockey schedule synced successfully",
+            "details": {
+                "added": sync_result["added"],
+                "updated": sync_result["updated"],
+                "deleted": sync_result["deleted"],
+                "cleaned_up_old": cleaned_count,
+                "total_website_events": sync_result["total_website_events"],
+                "total_db_events": sync_result["total_db_events"],
+                "user": sync_result["user"]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error syncing hockey schedule: {str(e)}"
+        ) 

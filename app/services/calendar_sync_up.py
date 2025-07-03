@@ -57,8 +57,8 @@ async def sync_events_up(db: AsyncSession):
         except Exception as e:
             return {"status": "error", "message": f"Failed to create CalDAV client: {e}"}
 
-        # 4. Find the target calendar (matching by name)
-        target_calendar_name = unsynced_events[0].calendar.name
+        # 4. Find the target calendar (HomeBase calendar)
+        target_calendar_name = "HomeBase"
         try:
             principal = client.principal()
             caldav_calendars = [

@@ -7,14 +7,19 @@ class CategoryBase(BaseModel):
     name: str
     color: str
 
-class CategoryCreate(CategoryBase):
-    pass
+class CategoryCreate(BaseModel):
+    name: str
+    color: Optional[str] = None
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = None
     color: Optional[str] = None
 
 class Category(CategoryBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CategoryResponse(CategoryBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 

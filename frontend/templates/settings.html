@@ -4,11 +4,39 @@
 
 {% block calendar_view %}
 <div class="settings-container p-4">
-    <h2 class="text-2xl font-bold mb-4">Manage People</h2>
-    <div id="categories-list" class="space-y-4">
-        <!-- Categories will be loaded here by JavaScript -->
-        <div class="category-item flex items-center justify-between p-2 border rounded-lg">
-            <span>Loading...</span>
+    <h2 class="text-2xl font-bold mb-6 text-neon-purple">Category Management</h2>
+    
+    <!-- Add New Category Form -->
+    <div class="bg-gray-800 p-4 rounded-lg mb-6 border border-neon-purple">
+        <h3 class="text-lg font-semibold mb-4 text-neon-green">Add New Category</h3>
+        <form id="add-category-form" class="space-y-4">
+            <div class="flex items-center space-x-4">
+                <input type="text" id="new-category-name" placeholder="Category name" 
+                       class="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:border-neon-purple focus:outline-none">
+                <input type="color" id="new-category-color" value="#BC13FE" 
+                       class="w-12 h-10 bg-gray-700 border border-gray-600 rounded cursor-pointer">
+                <button type="submit" 
+                        class="px-4 py-2 bg-neon-green text-black font-semibold rounded hover:bg-green-400 transition-colors">
+                    Add Category
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Categories List -->
+    <div class="bg-gray-800 p-4 rounded-lg border border-neon-blue">
+        <h3 class="text-lg font-semibold mb-4 text-neon-blue">Existing Categories</h3>
+        <div id="categories-list" class="space-y-3">
+            <!-- Categories will be loaded here by JavaScript -->
+            <div class="text-gray-400">Loading categories...</div>
+        </div>
+    </div>
+
+    <!-- Available Colors -->
+    <div class="bg-gray-800 p-4 rounded-lg mt-6 border border-neon-orange">
+        <h3 class="text-lg font-semibold mb-4 text-neon-orange">Available Neon Colors</h3>
+        <div id="available-colors" class="grid grid-cols-6 gap-2">
+            <!-- Colors will be loaded here -->
         </div>
     </div>
 </div>

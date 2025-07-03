@@ -1,26 +1,35 @@
 import asyncio
 from app.utils.database import AsyncSessionLocal
 from app.models.events import Category
-
-# Define the categories to be added
-CATEGORIES = [
-    {"name": "Mom", "color": "#BC13FE"},      # Neon Purple
-    {"name": "Dad", "color": "#FFFF33"},      # Neon Yellow
-    {"name": "Luca", "color": "#39FF14"},     # Neon Green
-    {"name": "Dominic", "color": "#2323FF"},  # Neon Blue
-    {"name": "Nico", "color": "#ff073a"},     # Neon Red
-    {"name": "Family", "color": "#FF5F1F"}    # Neon Orange
-]
+from app.config.categories import DEFAULT_CATEGORIES
 
 async def seed_data():
     async with AsyncSessionLocal() as db:
-        for cat_data in CATEGORIES:
+        # Check if categories already exist
+        from sqlalchemy import text
+        existing_categories = await db.execute(
+            text("SELECT name FROM categories")
+        )
+        existing_names = {row[0] for row in existing_categories.fetchall()}
+        
+        # Only add categories that don't already exist
+        categories_to_add = [
+            cat_data for cat_data in DEFAULT_CATEGORIES 
+            if cat_data["name"] not in existing_names
+        ]
+        
+        if not categories_to_add:
+            print("All default categories already exist.")
+            return
+        
+        for cat_data in categories_to_add:
             category = Category(**cat_data)
             db.add(category)
+            print(f"Adding category: {cat_data['name']} ({cat_data['color']})")
         
         try:
             await db.commit()
-            print("Successfully seeded categories.")
+            print(f"Successfully seeded {len(categories_to_add)} new categories.")
         except Exception as e:
             await db.rollback()
             print(f"Error seeding categories: {e}")

@@ -22,6 +22,7 @@ class Event(Base):
     end_time = Column(DateTime(timezone=True))
     location = Column(String, nullable=True)
     description = Column(Text, nullable=True)
+    user = Column(String, nullable=True, index=True)
     
     calendar_id = Column(Integer, ForeignKey("calendars.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
