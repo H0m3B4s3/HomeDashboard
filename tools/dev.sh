@@ -102,4 +102,13 @@ curl -s http://localhost:8001/api/calendar/
 
 bring_server_to_foreground
 
-echo "Press Ctrl+C to stop the server" 
+echo "Press Ctrl+C to stop the server"
+
+# Activate virtual environment
+if [ -d "$VENV_DIR" ]; then
+  source "$VENV_DIR/bin/activate"
+  export PYTHONPATH=$(pwd)
+else
+  echo "❌ Virtual environment not found! Run: python3 -m venv venv && source venv/bin/activate"
+  exit 1
+fi 
