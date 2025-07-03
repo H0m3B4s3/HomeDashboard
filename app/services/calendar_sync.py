@@ -3,13 +3,14 @@ from caldav.lib.error import AuthorizationError, NotFoundError
 from icalendar import Calendar
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import sys
 import os
 import re
 import httpx
 from typing import Union
+import recurring_ical_events
 
 # Add the project's root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -75,51 +76,56 @@ async def sync_calendar(db: AsyncSession):
     
     events_added = 0
     events_skipped = 0
-    
-    for component in cal.walk():
-        if component.name == "VEVENT":
-            uid = str(component.get('uid'))
-            
-            # Check if event already exists
-            result = await db.execute(select(Event).filter(Event.uid == uid))
-            existing_event = result.scalar_one_or_none()
-            
-            if existing_event:
-                events_skipped += 1
-                continue
-                
-            start_time = component.get('dtstart').dt
-            end_time = component.get('dtend').dt
 
-            # Ensure datetime objects are timezone-aware (UTC)
-            if isinstance(start_time, datetime) and start_time.tzinfo is None:
-                start_time = pytz.utc.localize(start_time)
-            if isinstance(end_time, datetime) and end_time.tzinfo is None:
-                end_time = pytz.utc.localize(end_time)
+    # Expand recurring events up to 1 year in the future
+    now = datetime.utcnow()
+    one_year_later = now + timedelta(days=365)
+    expanded_events = list(recurring_ical_events.of(cal).between(now, one_year_later))
+    processed_uids = set()
 
-            title = str(component.get('summary', ''))
-            description = str(component.get('description', ''))
-            
-            # Find matching category based on name in title or description
-            matching_category = find_matching_category(title, description, categories)
+    for event in expanded_events:
+        component = event['component']
+        uid = str(component.get('uid'))
+        # For recurring events, make UID unique per instance
+        instance_start = event['start']
+        instance_uid = f"{uid}-{instance_start.isoformat()}"
+        if instance_uid in processed_uids:
+            continue
+        processed_uids.add(instance_uid)
 
-            new_event = Event(
-                uid=uid,
-                title=title,
-                start_time=start_time,
-                end_time=end_time,
-                location=str(component.get('location', '')),
-                description=description,
-                calendar_id=calendar_to_sync.id,
-                category_id=matching_category.id if matching_category else None,
-                synced_at=datetime.utcnow() # Mark as synced from origin
-            )
-            db.add(new_event)
-            events_added += 1
+        # Check if event already exists
+        result = await db.execute(select(Event).filter(Event.uid == instance_uid))
+        existing_event = result.scalar_one_or_none()
+        if existing_event:
+            events_skipped += 1
+            continue
+
+        start_time = event['start']
+        end_time = event['end']
+        if isinstance(start_time, datetime) and start_time.tzinfo is None:
+            start_time = pytz.utc.localize(start_time)
+        if isinstance(end_time, datetime) and end_time.tzinfo is None:
+            end_time = pytz.utc.localize(end_time)
+
+        title = str(component.get('summary', ''))
+        description = str(component.get('description', ''))
+        matching_category = find_matching_category(title, description, categories)
+
+        new_event = Event(
+            uid=instance_uid,
+            title=title,
+            start_time=start_time,
+            end_time=end_time,
+            location=str(component.get('location', '')),
+            description=description,
+            calendar_id=calendar_to_sync.id,
+            category_id=matching_category.id if matching_category else None,
+            synced_at=datetime.utcnow()
+        )
+        db.add(new_event)
+        events_added += 1
 
     calendar_to_sync.last_synced = datetime.utcnow()
     db.add(calendar_to_sync)
-
     await db.commit()
-
     return {"status": "success", "message": f"Sync complete. Added {events_added} new events, skipped {events_skipped} existing events."} 
