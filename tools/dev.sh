@@ -116,9 +116,9 @@ for i in {1..30}; do
   sleep 1
 done
 
-# 6. Setup calendar and initial sync
+# 6. Setup calendar (no initial sync)
 ensure_calendar
-run_initial_sync
+# run_initial_sync  # <-- Commented out to avoid re-adding everything
 show_calendars
 
 echo "=================================================="

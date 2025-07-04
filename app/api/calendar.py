@@ -8,7 +8,7 @@ from app.models.calendar import Calendar
 from app.schemas import Calendar as CalendarSchema, CalendarCreate
 from app.services.calendar_sync import sync_calendar
 from app.services.calendar_sync_up import sync_events_up
-from app.services.two_way_sync import full_two_way_sync, sync_icloud_to_homebase, sync_homebase_to_icloud
+from app.services.two_way_sync import full_two_way_sync, sync_icloud_to_homebase, sync_homebase_to_icloud, smart_two_way_sync
 from scripts.hockey_schedule_sync import sync_hockey_events, create_hockey_category, cleanup_old_hockey_events
 
 router = APIRouter()
@@ -135,4 +135,17 @@ async def sync_hockey_schedule(db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error syncing hockey schedule: {str(e)}"
-        ) 
+        )
+
+@router.post("/smart-sync", status_code=status.HTTP_200_OK)
+async def smart_sync(db: AsyncSession = Depends(get_db)):
+    """
+    Smart two-way sync: Pull from iCloud, compare to local, push only truly new local events to iCloud, and update local DB to match iCloud.
+    """
+    sync_result = await smart_two_way_sync(db)
+    if sync_result["status"] != "success":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=sync_result["message"],
+        )
+    return sync_result 

@@ -33,9 +33,15 @@ import caldav
 from caldav.lib.error import AuthorizationError
 from icalendar import Calendar as iCalendar, Event as iEvent
 from config import settings
+from recurring_ical_events import of as recurring_of
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+TARGET_TITLES = [
+    'D- CFZ -Liz',
+    'N Hockey Summer Skills',
+]
 
 def normalize_event_key(event_data):
     """
@@ -190,6 +196,64 @@ async def export_icloud_events_to_csv(events, filename="icloud_events_export.csv
             ])
     print(f"\n📄 Exported {len(events)} iCloud events to {filename}")
 
+def norm_title(s):
+    return re.sub(r'\s+', ' ', (s or '').strip().lower())
+
+async def remove_standalone_if_recurring_exists(calendar, events, dry_run=True):
+    """
+    For TARGET_TITLES, delete non-recurring events if a recurring instance exists on the same date.
+    """
+    print("\n🔎 Checking for standalone events with recurring partners...")
+    # 1. Expand all recurring events for target titles
+    # Build a map: (norm_title, date) -> True if recurring instance exists
+    recurring_dates = set()
+    # Get all raw icalendar data
+    caldav_events = calendar.events()
+    for event in caldav_events:
+        try:
+            ical = event.icalendar_component
+            summary = str(ical.get('summary', ''))
+            if norm_title(summary) not in [norm_title(t) for t in TARGET_TITLES]:
+                continue
+            if ical.get('rrule'):
+                # This is a recurring event, expand it
+                cal = iCalendar()
+                cal.add_component(ical)
+                now = datetime.now()
+                one_year_later = now + timedelta(days=365)
+                try:
+                    for inst in recurring_of(cal).between(now - timedelta(days=30), one_year_later):
+                        inst_title = norm_title(str(inst.get('SUMMARY', '')))
+                        inst_start = inst.get('DTSTART').dt
+                        recurring_dates.add((inst_title, str(inst_start.date())))
+                except Exception as e:
+                    print(f"[WARN] Could not expand recurring event: {e}")
+        except Exception as e:
+            print(f"[WARN] Could not parse event: {e}")
+    # 2. For each non-recurring event, check if a recurring instance exists on the same date
+    to_delete = []
+    for uid, event in events.items():
+        title = norm_title(event['title'])
+        if title not in [norm_title(t) for t in TARGET_TITLES]:
+            continue
+        # Only consider non-recurring events
+        ical = getattr(event.get('caldav_event'), 'icalendar_component', None)
+        if ical and not ical.get('rrule'):
+            start_date = str(event['start_time'].date())
+            if (title, start_date) in recurring_dates:
+                to_delete.append((uid, event))
+    # 3. Delete the non-recurring events
+    print(f"\n🗑️ Will delete {len(to_delete)} standalone events that have a recurring partner:")
+    for uid, event in to_delete:
+        print(f"  - {event['title']} on {event['start_time']} (UID: {uid})")
+        if not dry_run:
+            try:
+                event['caldav_event'].delete()
+                print(f"    Deleted.")
+            except Exception as e:
+                print(f"    [ERROR] Failed to delete: {e}")
+    print(f"\n✅ Standalone cleanup complete.")
+
 async def cleanup_icloud_duplicates_advanced(dry_run=True):
     """
     Advanced cleanup that can actually delete duplicate events from iCloud.
@@ -308,6 +372,9 @@ async def cleanup_icloud_duplicates_advanced(dry_run=True):
     print(f"   Events removed: {removed_count}")
     if failed_count > 0:
         print(f"   Failed removals: {failed_count}")
+    
+    # After normal duplicate cleanup, run the targeted recurring/standalone cleanup
+    await remove_standalone_if_recurring_exists(target_calendar, caldav_events, dry_run=dry_run)
     
     return True
 

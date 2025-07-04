@@ -11,6 +11,7 @@ import httpx
 from typing import Union, Dict, List, Tuple
 import recurring_ical_events
 import logging
+from rapidfuzz import fuzz
 
 # Add the project's root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -38,10 +39,10 @@ def find_matching_category(title: str, description: str, categories: list[Catego
 async def fetch_icloud_events() -> Dict[str, Dict]:
     """
     Fetch all events from iCloud calendar and return them as a dictionary keyed by UID.
+    Only store master recurring events (with RRULE), single events, and overrides/exceptions (with RECURRENCE-ID).
     Returns: {uid: {event_data}}
     """
     icloud_events = {}
-    
     try:
         # Convert webcal:// URL to https:// URL
         webcal_url = settings.icloud_calendar_url
@@ -54,31 +55,17 @@ async def fetch_icloud_events() -> Dict[str, Dict]:
         async with httpx.AsyncClient() as client:
             response = await client.get(https_url)
             response.raise_for_status()
-            
         cal_data = response.text
         cal = iCalendar.from_ical(cal_data)
-        
-        # Process all events using recurring_ical_events to handle both recurring and non-recurring events
-        processed_uids = set()
-        
-        try:
-            now = datetime.utcnow()
-            one_year_later = now + timedelta(days=365)
-            expanded_events = list(recurring_ical_events.of(cal).between(now, one_year_later))
-            
-            for event in expanded_events:
-                uid = str(event.get('UID'))
-                summary = str(event.get('SUMMARY', ''))
-                start = event.get('DTSTART').dt
-                instance_uid = f"{uid}-{start.isoformat()}"
-                
-                if instance_uid in processed_uids:
-                    continue
-                processed_uids.add(instance_uid)
 
-                description = str(event.get('DESCRIPTION', ''))
-                location = str(event.get('LOCATION', ''))
-                end = event.get('DTEND')
+        for component in cal.walk():
+            if component.name == "VEVENT":
+                uid = str(component.get('uid'))
+                summary = str(component.get('summary', ''))
+                description = str(component.get('description', ''))
+                location = str(component.get('location', ''))
+                start = component.get('dtstart').dt
+                end = component.get('dtend')
                 if end:
                     end = end.dt
                 else:
@@ -86,57 +73,23 @@ async def fetch_icloud_events() -> Dict[str, Dict]:
                         end = start + timedelta(hours=1)
                     else:
                         end = start + timedelta(days=1)
-                
-                icloud_events[instance_uid] = {
-                    'uid': instance_uid,
+                rrule = component.get('rrule')
+                recurrence_id = component.get('recurrence-id')
+                icloud_events[uid] = {
+                    'uid': uid,
                     'title': summary,
                     'description': description,
                     'location': location,
                     'start_time': start,
                     'end_time': end,
+                    'rrule': rrule,
+                    'recurrence_id': recurrence_id,
                     'source': 'icloud'
                 }
-                
-        except Exception as e:
-            logger.error(f"Failed to process events with recurring_ical_events: {e}")
-            # Fallback to basic processing if recurring_ical_events fails
-            for component in cal.walk():
-                if component.name == "VEVENT":
-                    uid = str(component.get('uid'))
-                    start = component.get('dtstart').dt
-                    instance_uid = f"{uid}-{start.isoformat()}"
-                    
-                    if instance_uid in processed_uids:
-                        continue
-                    processed_uids.add(instance_uid)
-
-                    summary = str(component.get('summary', ''))
-                    description = str(component.get('description', ''))
-                    location = str(component.get('location', ''))
-                    end = component.get('dtend')
-                    if end:
-                        end = end.dt
-                    else:
-                        if hasattr(start, 'hour'):
-                            end = start + timedelta(hours=1)
-                        else:
-                            end = start + timedelta(days=1)
-                    
-                    icloud_events[instance_uid] = {
-                        'uid': instance_uid,
-                        'title': summary,
-                        'description': description,
-                        'location': location,
-                        'start_time': start,
-                        'end_time': end,
-                        'source': 'icloud'
-                    }
-            
     except Exception as e:
         logger.error(f"Error fetching iCloud events: {e}")
         return {}
-    
-    logger.info(f"Fetched {len(icloud_events)} events from iCloud")
+    logger.info(f"Fetched {len(icloud_events)} events from iCloud (masters, singles, exceptions only)")
     return icloud_events
 
 async def get_homebase_events(db: AsyncSession) -> Dict[str, Event]:
@@ -443,4 +396,99 @@ async def delete_event_from_icloud(uid: str, start_time) -> bool:
         return False
     except Exception as e:
         logger.error(f"Error deleting event from iCloud: {e}")
-        return False 
+        return False
+
+async def smart_two_way_sync(db: AsyncSession) -> Dict:
+    """
+    Smart two-way sync: Pull from iCloud, compare to local, push only truly new local events to iCloud, and update local DB to match iCloud.
+    """
+    logger.info("Starting smart two-way sync...")
+    icloud_events = await fetch_icloud_events()
+    homebase_events = await get_homebase_events(db)
+
+    # Helper: strong match (title, start date)
+    def strong_match(ev1, ev2):
+        title1 = (ev1['title'] if isinstance(ev1, dict) else ev1.title).strip().lower()
+        title2 = (ev2['title'] if isinstance(ev2, dict) else ev2.title).strip().lower()
+        date1 = str((ev1['start_time'] if isinstance(ev1, dict) else ev1.start_time).date())
+        date2 = str((ev2['start_time'] if isinstance(ev2, dict) else ev2.start_time).date())
+        return fuzz.ratio(title1, title2) > 90 and date1 == date2
+
+    # 1. Push new local events to iCloud
+    pushed = 0
+    for uid, local_event in homebase_events.items():
+        # If UID exists in iCloud, skip
+        if uid in icloud_events:
+            continue
+        # If strong match exists in iCloud, skip
+        if any(strong_match(local_event, ic_ev) for ic_ev in icloud_events.values()):
+            continue
+        # Otherwise, push to iCloud
+        try:
+            client = caldav.DAVClient(
+                url=settings.caldav_url,
+                username=settings.icloud_username,
+                password=settings.icloud_password
+            )
+            principal = client.principal()
+            caldav_calendars = [c for c in principal.calendars() if c.name == "HomeBase"]
+            if not caldav_calendars:
+                logger.error("HomeBase calendar not found on iCloud")
+                continue
+            calendar = caldav_calendars[0]
+            new_ievent = iEvent()
+            new_ievent.add('uid', uid)
+            new_ievent.add('summary', local_event.title)
+            new_ievent.add('dtstart', local_event.start_time)
+            new_ievent.add('dtend', local_event.end_time)
+            if local_event.description:
+                new_ievent.add('description', local_event.description)
+            if local_event.location:
+                new_ievent.add('location', vText(local_event.location))
+            new_ical = iCalendar()
+            new_ical.add_component(new_ievent)
+            calendar.save_event(new_ical.to_ical())
+            pushed += 1
+            logger.info(f"Pushed new local event to iCloud: {local_event.title} {local_event.start_time}")
+        except Exception as e:
+            logger.error(f"Failed to push event {uid} to iCloud: {e}")
+
+    # 2. Add new iCloud events to local DB
+    # Fetch HomeBase calendar once
+    result = await db.execute(select(CalendarModel).where(CalendarModel.name == "HomeBase"))
+    calendar = result.scalar_one_or_none()
+    if not calendar:
+        raise Exception("HomeBase calendar not found in DB")
+    added = 0
+    for uid, ic_event in icloud_events.items():
+        if uid in homebase_events:
+            continue
+        if any(strong_match(ic_event, ev) for ev in homebase_events.values()):
+            continue
+        try:
+            # Find matching category
+            result = await db.execute(select(Category))
+            categories = result.scalars().all()
+            category = find_matching_category(ic_event['title'], ic_event['description'], categories)
+            new_event = Event(
+                uid=uid,
+                title=ic_event['title'],
+                description=ic_event['description'],
+                location=ic_event['location'],
+                start_time=ic_event['start_time'],
+                end_time=ic_event['end_time'],
+                calendar_id=calendar.id,  # <-- Set the correct calendar_id
+                category_id=category.id if category else None,
+                synced_at=datetime.utcnow()
+            )
+            db.add(new_event)
+            added += 1
+            logger.info(f"Added new iCloud event to local DB: {ic_event['title']} {ic_event['start_time']}")
+        except Exception as e:
+            logger.error(f"Failed to add iCloud event {uid} to local DB: {e}")
+    await db.commit()
+    return {
+        "status": "success",
+        "message": f"Smart two-way sync complete. Pushed {pushed} new local events to iCloud, added {added} new iCloud events to local DB.",
+        "details": {"pushed": pushed, "added": added}
+    } 

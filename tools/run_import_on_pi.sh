@@ -16,7 +16,7 @@ echo -e "${BLUE}================================${NC}"
 echo ""
 
 echo -e "${YELLOW}📡 Connecting to Pi and running import...${NC}"
-ssh "$PI_HOST" "cd $PI_DIR && source venv/bin/activate && python prod_import_events.py"
+ssh "$PI_HOST" "cd $PI_DIR && source venv/bin/activate && PYTHONPATH=$PI_DIR python prod_import_events.py"
 
 echo ""
 echo -e "${GREEN}✅ Import completed!${NC}"
