@@ -158,6 +158,28 @@ async def sync_hockey_events():
                 logger.error("HomeBase calendar not found")
                 return
             
+            # Get Nico category ID first
+            from app.models.events import Category
+            category_query = select(Category).where(Category.name == "Nico")
+            category_result = await db.execute(category_query)
+            nico_category = category_result.scalar_one_or_none()
+            
+            if not nico_category:
+                # Create Nico category if it doesn't exist
+                from app.config.categories import DEFAULT_CATEGORIES
+                nico_config = next((cat for cat in DEFAULT_CATEGORIES if cat["name"] == "Nico"), None)
+                if nico_config:
+                    nico_category = Category(
+                        name="Nico",
+                        color=nico_config["color"]
+                    )
+                    db.add(nico_category)
+                    await db.commit()
+                    logger.info("Created Nico category")
+                else:
+                    logger.warning("Could not create Nico category, events will not be highlighted")
+                    nico_category = None
+            
             # Get existing hockey events
             existing_events = await get_existing_hockey_events(db)
             
@@ -201,6 +223,9 @@ async def sync_hockey_events():
                 db_event.location = website_event['location']
                 db_event.description = website_event['description']
                 db_event.user = website_event['user']
+                # Ensure hockey events are assigned to Nico category
+                if nico_category and not db_event.category_id:
+                    db_event.category_id = nico_category.id
                 db_event.updated_at = datetime.utcnow()
                 updated_count += 1
                 logger.info(f"Updated hockey event: {website_event['title']}")
@@ -217,7 +242,7 @@ async def sync_hockey_events():
                     description=event_data['description'],
                     user=event_data['user'],
                     calendar_id=calendar.id,
-                    category_id=None,  # Could be set to a hockey category if created
+                    category_id=nico_category.id if nico_category else None,
                     synced_at=datetime.utcnow()
                 )
                 
@@ -328,6 +353,64 @@ async def cleanup_old_hockey_events():
         logger.error(f"Error cleaning up old hockey events: {e}")
         return 0
 
+async def assign_nico_category_to_existing_events():
+    """Assign Nico category to existing hockey events that don't have it"""
+    try:
+        from app.utils.database import AsyncSessionLocal
+        from app.models.calendar import Calendar
+        from app.models.events import Event, Category
+        from sqlalchemy import select, update
+        
+        async with AsyncSessionLocal() as db:
+            # Get the HomeBase calendar
+            calendar_query = select(Calendar).where(Calendar.name == "HomeBase")
+            calendar_result = await db.execute(calendar_query)
+            calendar = calendar_result.scalar_one_or_none()
+            
+            if not calendar:
+                logger.error("HomeBase calendar not found")
+                return 0
+            
+            # Get Nico category
+            category_query = select(Category).where(Category.name == "Nico")
+            category_result = await db.execute(category_query)
+            nico_category = category_result.scalar_one_or_none()
+            
+            if not nico_category:
+                logger.warning("Nico category not found, creating it...")
+                from app.config.categories import DEFAULT_CATEGORIES
+                nico_config = next((cat for cat in DEFAULT_CATEGORIES if cat["name"] == "Nico"), None)
+                if nico_config:
+                    nico_category = Category(
+                        name="Nico",
+                        color=nico_config["color"]
+                    )
+                    db.add(nico_category)
+                    await db.commit()
+                    logger.info("Created Nico category")
+                else:
+                    logger.error("Could not create Nico category")
+                    return 0
+            
+            # Update hockey events without category
+            update_query = update(Event).where(
+                Event.calendar_id == calendar.id,
+                Event.uid.like("hockey_%"),
+                Event.category_id.is_(None)
+            ).values(category_id=nico_category.id)
+            
+            result = await db.execute(update_query)
+            await db.commit()
+            
+            updated_count = result.rowcount
+            if updated_count > 0:
+                logger.info(f"Assigned Nico category to {updated_count} existing hockey events")
+            return updated_count
+            
+    except Exception as e:
+        logger.error(f"Error assigning Nico category to existing events: {e}")
+        return 0
+
 if __name__ == "__main__":
     async def main():
         logger.info("Starting hockey schedule sync...")
@@ -337,6 +420,9 @@ if __name__ == "__main__":
         
         # Clean up old events
         await cleanup_old_hockey_events()
+        
+        # Assign Nico category to existing events that don't have it
+        await assign_nico_category_to_existing_events()
         
         # Sync hockey events
         sync_result = await sync_hockey_events()
