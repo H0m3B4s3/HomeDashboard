@@ -280,8 +280,18 @@ async def sync_homebase_to_icloud(db: AsyncSession) -> Dict:
                 new_ical = iCalendar()
                 new_ical.add_component(new_ievent)
 
-                # Use put_event instead of save_event to prevent UID corruption
-                target_calendar.put_event(new_ical.to_ical(), uid=uid)
+                # Delete any existing events with this UID to prevent corruption
+                for event in target_calendar.events():
+                    try:
+                        ical = event.icalendar_component
+                        event_uid = str(ical.get('uid', ''))
+                        if normalize_uid(event_uid) == normalize_uid(uid):
+                            event.delete()
+                            logger.info(f"Deleted existing event with UID: {event_uid}")
+                    except Exception as e:
+                        logger.warning(f"Failed to check/delete event: {e}")
+
+                target_calendar.save_event(new_ical.to_ical())
                 
                 # Mark as synced
                 homebase_event.synced_at = datetime.utcnow()
@@ -319,8 +329,18 @@ async def sync_homebase_to_icloud(db: AsyncSession) -> Dict:
                     new_ical = iCalendar()
                     new_ical.add_component(new_ievent)
 
-                    # Use put_event instead of save_event to prevent UID corruption
-                    target_calendar.put_event(new_ical.to_ical(), uid=uid)
+                    # Delete any existing events with this UID to prevent corruption
+                    for event in target_calendar.events():
+                        try:
+                            ical = event.icalendar_component
+                            event_uid = str(ical.get('uid', ''))
+                            if normalize_uid(event_uid) == normalize_uid(uid):
+                                event.delete()
+                                logger.info(f"Deleted existing event with UID: {event_uid}")
+                        except Exception as e:
+                            logger.warning(f"Failed to check/delete event: {e}")
+
+                    target_calendar.save_event(new_ical.to_ical())
                     
                     # Mark as synced
                     homebase_event.synced_at = datetime.utcnow()
