@@ -12,6 +12,7 @@ from typing import Union, Dict, List, Tuple
 import recurring_ical_events
 import logging
 from rapidfuzz import fuzz
+import re
 
 # Add the project's root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -35,6 +36,22 @@ def find_matching_category(title: str, description: str, categories: list[Catego
             return category
     
     return None
+
+def normalize_uid(uid: str) -> str:
+    """
+    Normalize a corrupted UID by removing timestamp suffixes.
+    
+    Examples:
+    - "601864A3-6877-42DB-8A8F-1BA451AC10BD-2025-07-10T15:30:00-04:00" 
+      -> "601864A3-6877-42DB-8A8F-1BA451AC10BD"
+    """
+    # Pattern to match timestamp suffixes
+    timestamp_pattern = r'-\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}(?:-\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2})*$'
+    
+    # Remove timestamp suffixes
+    normalized = re.sub(timestamp_pattern, '', uid)
+    
+    return normalized
 
 async def fetch_icloud_events() -> Dict[str, Dict]:
     """
@@ -75,8 +92,8 @@ async def fetch_icloud_events() -> Dict[str, Dict]:
                         end = start + timedelta(days=1)
                 rrule = component.get('rrule')
                 recurrence_id = component.get('recurrence-id')
-                icloud_events[uid] = {
-                    'uid': uid,
+                icloud_events[normalize_uid(uid)] = {
+                    'uid': normalize_uid(uid),
                     'title': summary,
                     'description': description,
                     'location': location,
@@ -263,7 +280,8 @@ async def sync_homebase_to_icloud(db: AsyncSession) -> Dict:
                 new_ical = iCalendar()
                 new_ical.add_component(new_ievent)
 
-                target_calendar.save_event(new_ical.to_ical())
+                # Use put_event instead of save_event to prevent UID corruption
+                target_calendar.put_event(new_ical.to_ical(), uid=uid)
                 
                 # Mark as synced
                 homebase_event.synced_at = datetime.utcnow()
@@ -301,7 +319,8 @@ async def sync_homebase_to_icloud(db: AsyncSession) -> Dict:
                     new_ical = iCalendar()
                     new_ical.add_component(new_ievent)
 
-                    target_calendar.save_event(new_ical.to_ical())
+                    # Use put_event instead of save_event to prevent UID corruption
+                    target_calendar.put_event(new_ical.to_ical(), uid=uid)
                     
                     # Mark as synced
                     homebase_event.synced_at = datetime.utcnow()
