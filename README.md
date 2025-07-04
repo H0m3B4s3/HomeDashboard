@@ -4,14 +4,14 @@ A comprehensive home management application built with FastAPI and modern web te
 
 ## 🚀 Current Status
 
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Status**: Production Ready  
 **Last Updated**: December 2024
 
 ### ✅ Implemented Features
 
 - **📅 Calendar Management**: Full CalDAV integration with iCloud
-- **🔄 Bidirectional Sync**: Downward sync from iCloud + upward sync to iCloud
+- **🔄 Canonical iCloud Sync**: iCloud as the single source of truth
 - **🏒 Specialized Sync**: Hockey schedule sync from Wallingford Hawks website
 - **🏷️ Category Management**: Color-coded event categorization with neon colors
 - **📱 Responsive UI**: Daily, weekly, and monthly calendar views
@@ -22,13 +22,51 @@ A comprehensive home management application built with FastAPI and modern web te
 
 ### 🔄 Sync Capabilities
 
-- **Downward Sync**: Pull events from iCloud calendar to local database
-- **Upward Sync**: Push local events to iCloud calendar
+- **Canonical iCloud Model**: iCloud is the source of truth for all events
+- **Create/Update/Delete**: All operations push to iCloud first, then sync local DB
 - **Hockey Sync**: Specialized sync for Wallingford Hawks hockey schedule
 - **Automatic Cleanup**: Remove old hockey events automatically
 - **Conflict Resolution**: Smart handling of duplicate events
 
 ## 🏗️ Architecture
+
+### Canonical iCloud Sync Model
+
+HomeBase now uses **iCloud as the canonical source of truth** for all calendar events. This ensures:
+
+- **No Data Divergence**: iCloud and HomeBase are always in sync
+- **iOS Integration**: Changes appear immediately on all iOS devices
+- **Reliable Sync**: Eliminates duplicate events and sync conflicts
+- **Simple Conflict Resolution**: "Last write wins" based on iCloud
+
+#### How It Works
+
+1. **Event Creation**: 
+   - Event is created in iCloud first via CalDAV
+   - Local DB is synced from iCloud to get the final event data
+   - Returns the event as stored in iCloud
+
+2. **Event Updates**:
+   - Event is updated in iCloud first (delete + recreate)
+   - Local DB is synced from iCloud
+   - Returns the updated event from iCloud
+
+3. **Event Deletion**:
+   - Event is deleted from iCloud first
+   - Local DB is synced from iCloud
+   - Ensures complete removal from both systems
+
+4. **Manual Sync**:
+   - Pulls all events from iCloud
+   - Overwrites local DB with iCloud data
+   - Ensures local DB matches iCloud exactly
+
+#### Benefits
+
+- ✅ **No Duplicates**: iCloud prevents duplicate events
+- ✅ **iOS Compatibility**: Changes appear on iPhone/iPad immediately  
+- ✅ **Reliable Sync**: Single source of truth eliminates conflicts
+- ✅ **Simple Architecture**: Clear data flow and error handling
 
 ### Tech Stack
 
@@ -251,11 +289,13 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 
 ## 📡 API Endpoints
 
-### Events
-- `GET /api/events/` - Get all events
-- `POST /api/events/` - Create new event
-- `PATCH /api/events/{id}` - Update event
-- `DELETE /api/events/{id}` - Delete event
+### Events (Canonical iCloud Sync)
+- `GET /api/events/` - Get all events from local DB
+- `POST /api/events/` - Create new event (pushes to iCloud first, then syncs local DB)
+- `PATCH /api/events/{id}` - Update event (updates iCloud first, then syncs local DB)
+- `DELETE /api/events/{id}` - Delete event (deletes from iCloud first, then syncs local DB)
+
+**Note**: All event operations require iCloud connectivity. If iCloud is unavailable, operations will fail with appropriate error messages.
 
 ### Categories
 - `GET /api/categories/` - Get all categories
@@ -267,8 +307,11 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 ### Calendar Sync
 - `GET /api/calendar/` - Get all calendars
 - `POST /api/calendar/` - Create calendar
-- `POST /api/calendar/sync` - Sync from iCloud (downward)
-- `POST /api/calendar/sync-up` - Sync to iCloud (upward)
+- `POST /api/calendar/sync` - Sync from iCloud (legacy - use manual sync)
+- `POST /api/calendar/sync-up` - Sync to iCloud (legacy - use manual sync)
+- `POST /api/calendar/sync-two-way` - Full two-way sync (recommended)
+- `POST /api/calendar/sync-import` - Import from iCloud only
+- `POST /api/calendar/sync-export` - Export to iCloud only
 - `POST /api/calendar/sync-hockey` - Sync hockey schedule
 
 ## 🎨 Frontend Features
@@ -327,23 +370,34 @@ Predefined neon colors for categories:
 
 ## 🔄 Sync Operations
 
-### Downward Sync (iCloud → Local)
-- Fetches events from iCloud calendar
-- Creates new events in local database
-- Updates existing events
-- Maintains sync timestamps
+### Canonical iCloud Sync Model
 
-### Upward Sync (Local → iCloud)
-- Pushes local events to iCloud
-- Creates new events on iCloud
-- Updates existing iCloud events
-- Handles conflicts gracefully
+All sync operations now treat iCloud as the source of truth:
+
+#### Event Operations
+- **Create**: Event created in iCloud → Local DB synced from iCloud
+- **Update**: Event updated in iCloud → Local DB synced from iCloud  
+- **Delete**: Event deleted from iCloud → Local DB synced from iCloud
+
+#### Manual Sync Operations
+- **Full Sync**: Pull all events from iCloud, overwrite local DB
+- **Import Only**: Pull new/updated events from iCloud to local DB
+- **Export Only**: Push local events to iCloud (for initial setup)
 
 ### Hockey Schedule Sync
 - Scrapes Wallingford Hawks website
 - Creates hockey-specific category
 - Syncs game schedules
 - Cleans up old events automatically
+
+### Error Handling
+
+The system handles various error scenarios:
+
+- **iCloud Unavailable**: Operations fail gracefully with clear error messages
+- **Authentication Issues**: Credential errors are reported immediately
+- **Network Problems**: Timeout and connection errors are handled
+- **Partial Failures**: Individual event failures don't stop the entire sync
 
 ## 🛠️ Development
 
@@ -380,20 +434,47 @@ python3 tests/test_hockey_sync.py
    - Verify app-specific password
    - Check calendar URL format
    - Ensure 2FA is enabled on Apple ID
+   - Test iCloud connectivity: `python3 tests/test_caldav_connection.py`
 
-2. **Database Errors**
+2. **Event Operations Fail**
+   - Check iCloud connectivity first
+   - Verify HomeBase calendar exists on iCloud
+   - Ensure proper CalDAV credentials
+   - Check for network connectivity issues
+
+3. **Database Errors**
    - Delete `database.db` and recreate
    - Run `python3 scripts/create_db.py`
+   - Sync from iCloud to restore data
 
-3. **Port Conflicts**
+4. **Port Conflicts**
    - Change port in `config.py`
    - Check for other services using port 8000
+
+5. **Canonical Sync Issues**
+   - Run manual sync: `POST /api/calendar/sync-two-way`
+   - Check iCloud calendar for duplicates
+   - Use cleanup scripts: `python3 scripts/cleanup_ios_duplicates_advanced.py`
+
+### Testing the Canonical Sync
+
+```bash
+# Test iCloud connectivity
+python3 tests/test_caldav_connection.py
+
+# Test canonical sync operations
+python3 tests/test_canonical_icloud_sync.py
+
+# Test two-way sync
+python3 tests/test_two_way_sync.py
+```
 
 ### Logs
 
 - **Application Logs**: Check console output
 - **Sync Logs**: Query `sync_logs` table
 - **System Logs**: `sudo journalctl -u homebase -f`
+- **iCloud Errors**: Check for CalDAV authentication and network errors
 
 ## 📈 Roadmap
 

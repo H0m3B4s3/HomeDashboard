@@ -21,7 +21,14 @@ async def test_hockey_sync():
     print("\n1. Testing website parsing...")
     events = parse_hockey_schedule()
     if events:
-        print(f"✅ Successfully parsed {len(events)} events from website")
+        # Assert all events are assigned to Nico
+        non_nico_events = [e for e in events if e.get('user') != 'Nico']
+        if non_nico_events:
+            print(f"❌ ERROR: {len(non_nico_events)} events are not assigned to user 'Nico'.")
+            for e in non_nico_events:
+                print(f"   - {e['title']} on {e['start_time'].strftime('%Y-%m-%d %H:%M')} (User: {e.get('user')})")
+            assert False, "All hockey events should be assigned to user 'Nico'"
+        print(f"✅ All {len(events)} events are assigned to user 'Nico'")
         print(f"   Sample events:")
         for i, event in enumerate(events[:3]):  # Show first 3 events
             print(f"   - {event['title']} on {event['start_time'].strftime('%Y-%m-%d %H:%M')} (User: {event['user']})")

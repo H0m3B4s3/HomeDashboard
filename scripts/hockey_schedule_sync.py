@@ -10,10 +10,8 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import pytz
-from app.utils.database import get_db
-from app.models.events import Event
-from app.models.calendar import Calendar
-from sqlalchemy import select, delete
+# Import will be handled inside the async functions
+# Imports will be handled inside the async functions
 import logging
 
 # Set up logging
@@ -109,6 +107,10 @@ def parse_hockey_schedule():
 async def get_existing_hockey_events(db):
     """Get all existing hockey events from the database"""
     try:
+        from app.models.calendar import Calendar
+        from app.models.events import Event
+        from sqlalchemy import select
+        
         # Get the HomeBase calendar
         calendar_query = select(Calendar).where(Calendar.name == "HomeBase")
         calendar_result = await db.execute(calendar_query)
@@ -142,7 +144,11 @@ async def sync_hockey_events():
             logger.warning("No hockey events found to sync")
             return
         
-        async with get_db() as db:
+        from app.utils.database import AsyncSessionLocal
+        from app.models.calendar import Calendar
+        from app.models.events import Event
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as db:
             # Get the HomeBase calendar
             calendar_query = select(Calendar).where(Calendar.name == "HomeBase")
             calendar_result = await db.execute(calendar_query)
@@ -243,9 +249,11 @@ async def sync_hockey_events():
 async def create_hockey_category():
     """Create a hockey category for organizing hockey events"""
     try:
-        async with get_db() as db:
-            from app.models.events import Category
-            
+        from app.utils.database import AsyncSessionLocal
+        from app.models.events import Category
+        from sqlalchemy import select
+        
+        async with AsyncSessionLocal() as db:
             # Check if hockey category already exists
             category_query = select(Category).where(Category.name == "Hockey")
             category_result = await db.execute(category_query)
@@ -287,7 +295,12 @@ async def cleanup_old_hockey_events():
         # Remove events older than 6 months ago
         cutoff_date = datetime.now(CT_TIMEZONE) - timedelta(days=180)
         
-        async with get_db() as db:
+        from app.utils.database import AsyncSessionLocal
+        from app.models.calendar import Calendar
+        from app.models.events import Event
+        from sqlalchemy import select, delete
+        
+        async with AsyncSessionLocal() as db:
             # Get the HomeBase calendar
             calendar_query = select(Calendar).where(Calendar.name == "HomeBase")
             calendar_result = await db.execute(calendar_query)

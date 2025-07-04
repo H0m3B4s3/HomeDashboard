@@ -38,6 +38,7 @@ async def sync_calendar(db: AsyncSession):
     """
     Fetches events from iCloud calendar using webcal URL,
     parses them, and stores them in the database.
+    Uses recurring_ical_events library to handle both recurring and non-recurring events.
     """
     # We will sync the HomeBase calendar specifically.
     result = await db.execute(select(CalendarModel).where(CalendarModel.name == "HomeBase"))
@@ -76,66 +77,35 @@ async def sync_calendar(db: AsyncSession):
     events_added = 0
     events_skipped = 0
     processed_uids = set()
+    processed_event_keys = set()  # Track normalized event keys to prevent duplicates
 
-    # First, process all original events (including non-recurring ones)
-    for component in cal.walk():
-        if component.name == "VEVENT":
-            uid = str(component.get('uid'))
-            start = component.get('dtstart').dt
-            instance_uid = f"{uid}-{start.isoformat()}"
-            
-            if instance_uid in processed_uids:
-                continue
-            processed_uids.add(instance_uid)
+    def normalize_event_key(title, start, end, location):
+        """Normalize event data for duplicate detection"""
+        import re
+        def norm(s):
+            return re.sub(r'\s+', ' ', (s or '').strip().lower())
+        
+        def to_date_str(time_obj):
+            if time_obj is None:
+                return None
+            if hasattr(time_obj, 'date'):
+                return str(time_obj.date())
+            return str(time_obj)
+        
+        return (
+            norm(title),
+            to_date_str(start),
+            to_date_str(end),
+            norm(location)
+        )
 
-            # Check if event already exists in the DB
-            result = await db.execute(select(Event).filter(Event.uid == instance_uid))
-            existing_event = result.scalar_one_or_none()
-            if existing_event:
-                events_skipped += 1
-                continue
-            
-            # Process the original event using existing logic
-            try:
-                # Extract event data using existing logic
-                summary = str(component.get('summary', ''))
-                description = str(component.get('description', ''))
-                location = str(component.get('location', ''))
-                end = component.get('dtend')
-                if end:
-                    end = end.dt
-                else:
-                    # If no end time, assume 1 hour duration
-                    if hasattr(start, 'hour'):
-                        end = start + timedelta(hours=1)
-                    else:
-                        end = start + timedelta(days=1)
-                
-                # Create event in database
-                event = Event(
-                    uid=instance_uid,
-                    title=summary,
-                    description=description,
-                    location=location,
-                    start_time=start,
-                    end_time=end,
-                    calendar_id=calendar_to_sync.id
-                )
-                db.add(event)
-                events_added += 1
-                print(f"[DEBUG] Added original event: {instance_uid}, {summary}, {start}", flush=True)
-                
-            except Exception as e:
-                print(f"[ERROR] Failed to process original event {instance_uid}: {e}", flush=True)
-                events_skipped += 1
-
-    # Now expand and process recurring events
     try:
-        # Expand recurring events up to 1 year in the future
+        # Use recurring_ical_events to expand ALL events (both recurring and non-recurring)
+        # This ensures we get all instances without double-processing
         now = datetime.utcnow()
         one_year_later = now + timedelta(days=365)
         expanded_events = list(recurring_ical_events.of(cal).between(now, one_year_later))
-        print(f"[DEBUG] Number of expanded recurring events: {len(expanded_events)}", flush=True)
+        print(f"[DEBUG] Number of expanded events (recurring + non-recurring): {len(expanded_events)}", flush=True)
         
         for event in expanded_events:
             uid = str(event.get('UID'))
@@ -144,6 +114,7 @@ async def sync_calendar(db: AsyncSession):
             instance_uid = f"{uid}-{start.isoformat()}"
             
             if instance_uid in processed_uids:
+                print(f"[DEBUG] Skipping duplicate instance: {instance_uid}")
                 continue
             processed_uids.add(instance_uid)
 
@@ -168,6 +139,14 @@ async def sync_calendar(db: AsyncSession):
                     else:
                         end = start + timedelta(days=1)
                 
+                # Check for duplicates using normalized event key
+                event_key = normalize_event_key(summary, start, end, location)
+                if event_key in processed_event_keys:
+                    print(f"[DEBUG] Skipping duplicate event key: {summary} at {start}")
+                    events_skipped += 1
+                    continue
+                processed_event_keys.add(event_key)
+                
                 # Create event in database
                 event_obj = Event(
                     uid=instance_uid,
@@ -180,15 +159,15 @@ async def sync_calendar(db: AsyncSession):
                 )
                 db.add(event_obj)
                 events_added += 1
-                print(f"[DEBUG] Added recurring event: {instance_uid}, {summary}, {start}", flush=True)
+                print(f"[DEBUG] Added event: {instance_uid}, {summary}, {start}", flush=True)
                 
             except Exception as e:
-                print(f"[ERROR] Failed to process recurring event {instance_uid}: {e}", flush=True)
+                print(f"[ERROR] Failed to process event {instance_uid}: {e}", flush=True)
                 events_skipped += 1
                 
     except Exception as e:
-        print(f"[ERROR] Failed to expand recurring events: {e}", flush=True)
-        # Continue with sync even if recurring expansion fails
+        print(f"[ERROR] Failed to expand events: {e}", flush=True)
+        return {"status": "error", "message": f"Failed to process calendar events: {str(e)}"}
 
     calendar_to_sync.last_synced = datetime.utcnow()
     db.add(calendar_to_sync)

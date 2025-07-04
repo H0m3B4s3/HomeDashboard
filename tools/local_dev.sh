@@ -8,6 +8,13 @@ red='\033[0;31m'
 yellow='\033[1;33m'
 reset='\033[0m'
 
+# Check for --recreate-db flag
+RECREATE_DB=false
+if [[ "$1" == "--recreate-db" ]]; then
+  RECREATE_DB=true
+  echo -e "${yellow}Database will be recreated (--recreate-db flag detected)${reset}"
+fi
+
 function print_step() {
   echo -e "${yellow}==> $1${reset}"
 }
@@ -31,17 +38,21 @@ fi
 # Set PYTHONPATH to project root
 export PYTHONPATH=$(pwd)
 
-# Recreate database
-print_step "Recreating database..."
-python3 scripts/create_db.py && print_success "Database created."
-
-# Seed categories
-print_step "Seeding categories..."
-python3 scripts/seed_categories.py && print_success "Categories seeded."
-
-# Add sample events
-print_step "Adding sample events..."
-python3 scripts/add_sample_events.py && print_success "Sample events added."
+# Recreate database only if requested
+if [ "$RECREATE_DB" = true ]; then
+  print_step "Recreating database..."
+  python3 scripts/create_db.py && print_success "Database created."
+  
+  # Seed categories
+  print_step "Seeding categories..."
+  python3 scripts/seed_categories.py && print_success "Categories seeded."
+  
+  # Add sample events
+  print_step "Adding sample events..."
+  python3 scripts/add_sample_events.py && print_success "Sample events added."
+else
+  print_step "Using existing database (use --recreate-db to recreate)"
+fi
 
 # Run all tests
 print_step "Running all test scripts..."

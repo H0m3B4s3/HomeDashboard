@@ -8,6 +8,7 @@ from app.models.calendar import Calendar
 from app.schemas import Calendar as CalendarSchema, CalendarCreate
 from app.services.calendar_sync import sync_calendar
 from app.services.calendar_sync_up import sync_events_up
+from app.services.two_way_sync import full_two_way_sync, sync_icloud_to_homebase, sync_homebase_to_icloud
 from scripts.hockey_schedule_sync import sync_hockey_events, create_hockey_category, cleanup_old_hockey_events
 
 router = APIRouter()
@@ -36,7 +37,7 @@ async def get_calendars(db: AsyncSession = Depends(get_db)):
 
 @router.post("/sync", status_code=status.HTTP_200_OK)
 async def sync_icloud_calendar(db: AsyncSession = Depends(get_db)):
-    # This is the existing downward sync
+    """Legacy endpoint - use /sync-two-way for better sync"""
     sync_result = await sync_calendar(db)
     if sync_result["status"] == "error":
         raise HTTPException(
@@ -47,8 +48,50 @@ async def sync_icloud_calendar(db: AsyncSession = Depends(get_db)):
 
 @router.post("/sync-up", status_code=status.HTTP_200_OK)
 async def sync_local_events_to_icloud(db: AsyncSession = Depends(get_db)):
-    """Triggers the upward sync from local DB to iCloud."""
+    """Legacy endpoint - use /sync-two-way for better sync"""
     sync_result = await sync_events_up(db)
+    if sync_result["status"] == "error":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=sync_result["message"],
+        )
+    return sync_result
+
+@router.post("/sync-two-way", status_code=status.HTTP_200_OK)
+async def sync_two_way(db: AsyncSession = Depends(get_db)):
+    """
+    NEW: Perform complete two-way sync between HomeBase and iCloud.
+    This prevents duplicates by checking both systems before syncing.
+    """
+    sync_result = await full_two_way_sync(db)
+    if sync_result["status"] == "error":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=sync_result["message"],
+        )
+    return sync_result
+
+@router.post("/sync-import", status_code=status.HTTP_200_OK)
+async def sync_import_from_icloud(db: AsyncSession = Depends(get_db)):
+    """
+    NEW: Import events from iCloud to HomeBase only.
+    Only adds new events or updates existing ones.
+    """
+    sync_result = await sync_icloud_to_homebase(db)
+    if sync_result["status"] == "error":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=sync_result["message"],
+        )
+    return sync_result
+
+@router.post("/sync-export", status_code=status.HTTP_200_OK)
+async def sync_export_to_icloud(db: AsyncSession = Depends(get_db)):
+    """
+    NEW: Export events from HomeBase to iCloud only.
+    Always checks iCloud first to prevent duplicates.
+    """
+    sync_result = await sync_homebase_to_icloud(db)
     if sync_result["status"] == "error":
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
