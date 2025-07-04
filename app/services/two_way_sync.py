@@ -58,44 +58,9 @@ async def fetch_icloud_events() -> Dict[str, Dict]:
         cal_data = response.text
         cal = iCalendar.from_ical(cal_data)
         
-        # Process all events (including recurring ones)
+        # Process all events using recurring_ical_events to handle both recurring and non-recurring events
         processed_uids = set()
         
-        # First, process original events
-        for component in cal.walk():
-            if component.name == "VEVENT":
-                uid = str(component.get('uid'))
-                start = component.get('dtstart').dt
-                instance_uid = f"{uid}-{start.isoformat()}"
-                
-                if instance_uid in processed_uids:
-                    continue
-                processed_uids.add(instance_uid)
-
-                # Extract event data
-                summary = str(component.get('summary', ''))
-                description = str(component.get('description', ''))
-                location = str(component.get('location', ''))
-                end = component.get('dtend')
-                if end:
-                    end = end.dt
-                else:
-                    if hasattr(start, 'hour'):
-                        end = start + timedelta(hours=1)
-                    else:
-                        end = start + timedelta(days=1)
-                
-                icloud_events[instance_uid] = {
-                    'uid': instance_uid,
-                    'title': summary,
-                    'description': description,
-                    'location': location,
-                    'start_time': start,
-                    'end_time': end,
-                    'source': 'icloud'
-                }
-        
-        # Now expand and process recurring events
         try:
             now = datetime.utcnow()
             one_year_later = now + timedelta(days=365)
@@ -133,7 +98,39 @@ async def fetch_icloud_events() -> Dict[str, Dict]:
                 }
                 
         except Exception as e:
-            logger.warning(f"Failed to expand recurring events: {e}")
+            logger.error(f"Failed to process events with recurring_ical_events: {e}")
+            # Fallback to basic processing if recurring_ical_events fails
+            for component in cal.walk():
+                if component.name == "VEVENT":
+                    uid = str(component.get('uid'))
+                    start = component.get('dtstart').dt
+                    instance_uid = f"{uid}-{start.isoformat()}"
+                    
+                    if instance_uid in processed_uids:
+                        continue
+                    processed_uids.add(instance_uid)
+
+                    summary = str(component.get('summary', ''))
+                    description = str(component.get('description', ''))
+                    location = str(component.get('location', ''))
+                    end = component.get('dtend')
+                    if end:
+                        end = end.dt
+                    else:
+                        if hasattr(start, 'hour'):
+                            end = start + timedelta(hours=1)
+                        else:
+                            end = start + timedelta(days=1)
+                    
+                    icloud_events[instance_uid] = {
+                        'uid': instance_uid,
+                        'title': summary,
+                        'description': description,
+                        'location': location,
+                        'start_time': start,
+                        'end_time': end,
+                        'source': 'icloud'
+                    }
             
     except Exception as e:
         logger.error(f"Error fetching iCloud events: {e}")
